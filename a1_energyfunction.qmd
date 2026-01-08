@@ -1,0 +1,53 @@
+---
+title: "Assignment 1: R Function"
+author: "Sofia Sarak"
+format: html
+editor: visual
+---
+
+The following document contains the response for the R function portion of Assignment 1 of EDS230: Modeling Environmental Systems, completed by Sofia Sarak.
+
+## Energy Function Directions
+
+In this course, we will work a lot with writing and applying functions; You've all been exposed to writing functions in previous courses - but just to make sure that everyone remembers the basic syntax in R, complete the following:
+
+Write a function that computes energy produced from a photovoltaic system if you know the average annual solar radiation. You can use the following formula:
+
+The energy produced by a solar panel system is given by
+
+$$
+E = A \cdot r \cdot H \cdot PR
+$$
+
+where:
+
+-   $E$ is the energy produced (kWh),
+-   $A$ is the solar panel area (m$^2$),
+-   $r$ is the panel yield (dimensionless, 0–1), representing manufacturer efficiency (typically $\sim 0.2$),
+-   $PR$ is the performance ratio (dimensionless, 0–1), accounting for site-specific losses (typically $\sim 0.75$),
+-   $H$ is the annual average solar radiation (kWh m$^{-2}$).
+
+Write your function in R; make sure that you add documentation; include default values for *r* and *PR* in the function definition; save the function in a single file to upload to Canvas.
+
+
+
+## Response
+
+The following function calculates the amount of energy (in KWh/m^2) produced by a PV system, using solar panel area (m^2), solar panel yield (dimensionless, represents manufacturer efficiency), performance ratio (dimensionless, represents site-specific losses), and the annual average solar radiation (KWh/m^2).
+
+The formula is as follows:
+
+$$
+E = A \cdot r \cdot H \cdot PR
+$$
+
+Default values of 0.2 for solar panel yield and 0.75 for performance ratio were attributed based on typical values.
+
+```{r}
+# Initialize functions with area, yield, performance ratio, and solar radiation as arguments
+pv_energy <- function(A, r = 0.2, PR = 0.75, H){
+  e <- A * r * PR * H        # Follow energy production formula, calculating energy
+  return(e)                  # Return the final, calculated energy value --> e
+}
+```
+
