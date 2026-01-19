@@ -1,0 +1,68 @@
+---
+title: "Lab 2: Sensitivity Analysis"
+format: html
+editor: visual
+---
+
+```{r}
+library(tidyverse)
+```
+
+
+```{r}
+# create normal distribution for ethresh parameter
+ethresh <- rnorm(mean = 10000, sd = 1500, n = 20)
+
+# run solarpv function over ethresh
+example <- ethresh %>% 
+  map(~ solarpv(area = 0.1, 
+  solar = sierraczosolar, clr = "green", 
+  eunit = "kWhr", g = TRUE, etype = "direct", eff = 0.6, ethresh = .x))
+```
+
+```{r}
+ethresh_2 <- seq(from = 8500, to = 11500, length.out = 20)
+year <- c(1945, 1946, 1947, 1948, 1949, 1950, 1951, 1952, 1953)
+
+combos <- expand_grid(year, ethresh_2)
+
+combos <- combos %>% 
+  mutate(solarpv = solarpv(area = 0.1, 
+  solar = sierraczosolar, clr = "green", 
+  eunit = "kWhr", g = FALSE, etype = "direct", eff = 0.6, ethresh = ethresh_2))
+```
+```{r}
+example_2 <- ethresh_2 %>% 
+  map(~ solarpv(area = 0.1, 
+  solar = sierraczosolar, clr = "green", 
+  eunit = "kWhr", g = TRUE, etype = "direct", eff = 0.6, ethresh = .x))
+```
+function
+```{r}
+ethresh_fun <- function(ethresh_val){
+  
+  # calculate using threshold
+  obj <- map(~ solarpv(area = 0.1, 
+  solar = sierraczosolar, clr = "green", 
+  eunit = "kWhr", g = FALSE, etype = "direct", eff = 0.6, ethresh = ethresh_val))
+  
+  # save as df
+  obj_df <- as.data.frame(obj)
+  
+  # add threshold column
+  obj_df <- obj_df %>% 
+    mutate(ethresh = ethresh_val)
+  
+  return(obj_df)
+}
+
+ethresh_fun(ethresh_val = 8500)
+```
+
+Final answer
+```{r}
+# Run model from parameters
+
+
+```
+
