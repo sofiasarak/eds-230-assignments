@@ -1,9 +1,14 @@
 #' Almond Profit Function
+#' 
+#' A function that returns almond production profit based on a number of variables
 #'
-#' @returns
-#' @export
+#' @param price_lb the average price per pound that one can sell an almond for
+#' @param cost_acre the average cost of growing an acre of almonds
+#' @param climate_data a data frame containing precipitation and temperature data 
 #'
-#' @examples
+#' @returns a data frame with year, almond yield, almond profit, price per pound, and cost per acre
+#'
+#'
 alm_profit <- function(price_lb, cost_acre, climate_data){
   
   ## Creating alm_yield function
@@ -21,43 +26,27 @@ alm_profit <- function(price_lb, cost_acre, climate_data){
       group_by(year) %>% 
       summarize(precip_sum_jan = sum(precip))
     
-    # Extract necessary variables from respective dfs
-    tmin_feb <- climate_month$min_temp_feb
-    prec_jan <- precip_month$precip_sum_jan
+    # Combine to keep year -- important for almond profit calculation
+    result <- climate_month %>%
+      left_join(precip_month, by = "year")
     
-    # Apply formula to variables
-    yield <- (-0.015 * tmin_feb) - (0.0046 * (tmin_feb)^2) - (0.07 * prec_jan) + (0.0043 * (prec_jan)^2) + 0.28
+    # Apply formula
+    result$yield <- (-0.015 * result$min_temp_feb) - (0.0046 * (result$min_temp_feb)^2) - 
+      (0.07 * result$precip_sum_jan) + (0.0043 * (result$precip_sum_jan)^2) + 0.28
     
+    return(result %>% select(year, yield))
   }
   
-  ## Calculating profit
+  ## Calculate profit
+  result <- alm_yield(climate_data)
+  
   # Calculate price per ton
   price_ton <- price_lb * 2000
   
-  # Calculate revenue
-  revenue <- price_ton * yield
+  # Calculate revenue and profit
+  result$profit <- (price_ton * result$yield) - cost_acre
+  result$price_lb <- price_lb
+  result$cost_acre <- cost_acre
   
-  # Calculate final profit
-  profit <- revenue - cost_acre
-  
-  return(profit)
+  return(result)
 }
-  
-
-# notes
-# profit = revenue - cost
-# revenue = yield * price per unit
-# cost = fixed + variable cost
-# fixed = machinery price + labor
-# variable = price of water
-# do we want price to be constant --> adjust for inflation?
-# almond yield anomaly will be one input, but profit should depend on actual yield, assume a baseline yield?
-
-# price: need it in tons?
-# profit: will be in $/acre
-# price: 1.99 per pound; 3,980 per ton (times 2000)
-
-# machinery
-# labor
-# price of water
-# in total, operating cost = on average, $3029 per acre

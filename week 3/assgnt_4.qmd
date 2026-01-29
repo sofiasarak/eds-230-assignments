@@ -1,9 +1,20 @@
 ---
-title: "Almond Profit"
-author: "Sofia Sarak"
-format: html
-editor: visual
+title: "Almond Profit Function"
+author: 
+  - Ixel Medrano
+  - Sofia Sarak
+format: pdf
 ---
+
+Our almond profit function uses the parameters:
+
+- price per pound that almonds are sold at
+
+- cost per acre to grow almonds
+
+The almond yield function we had created for Assignment 3 is embedded within our new profit function.
+
+## Set Up
 
 ```{r}
 #| message: false
@@ -19,86 +30,162 @@ climate <- read_table(here("week 3/clim.txt")) %>%
   clean_names()
 ```
 
-```{r}
-source(here("alm_yield.R"))
-```
+## Test Case: Figuring Our Profit Function
 
 ```{r}
+# Source yield function
+source(here("alm_yield.R"))
+
+# Use yield function to find yield
 yield <- alm_yield(climate)
 
+# Assign values to our parameters of interest
 price_lb <- 1.99
 price_ton <- price_lb * 2000
 
-revenue <- price_ton * yield
-
 cost_acre <- 3029
 
+# Calculate revenue and profit
+revenue <- price_ton * yield
 profit <- revenue - cost_acre
-
-profit
 ```
+
+Once we confirmed that our function and calculations are successful, we incoporated them into our larger function.
+
+## Building the Function
 
 ```{r}
 alm_profit <- function(price_lb, cost_acre, climate_data){
   
-## Creating alm_yield function
+  ## Creating alm_yield function
   alm_yield <- function(climate_data){
+    
+    # Find mean minimum temperature in February of each year
+    climate_month <- climate_data %>% 
+      filter(month == 2) %>% 
+      group_by(year) %>% 
+      summarize(min_temp_feb = mean(tmin_c))
+    
+    # Find total precipitation in January of each year 
+    precip_month <- climate_data %>% 
+      filter(month == 1) %>% 
+      group_by(year) %>% 
+      summarize(precip_sum_jan = sum(precip))
+    
+    # Combine to keep year -- important for almond profit calculation
+    result <- climate_month %>%
+      left_join(precip_month, by = "year")
+    
+    # Apply formula
+    result$yield <- (-0.015 * result$min_temp_feb) - (0.0046 * (result$min_temp_feb)^2) - 
+                    (0.07 * result$precip_sum_jan) + (0.0043 * (result$precip_sum_jan)^2) + 0.28
+    
+    return(result %>% select(year, yield))
+  }
   
-  # Find mean minimum temperature in February of each year
-  climate_month <- climate_data %>% 
-  filter(month == 2) %>% 
-  group_by(year) %>% 
-  summarize(min_temp_feb = mean(tmin_c))
+  ## Calculate profit
+  result <- alm_yield(climate_data)
   
-  # Find total precipitation in January of each year 
-  precip_month <- climate_data %>% 
-    filter(month == 1) %>% 
-    group_by(year) %>% 
-    summarize(precip_sum_jan = sum(precip))
-  
-  # Extract necessary variables from respective dfs
-  tmin_feb <- climate_month$min_temp_feb
-  prec_jan <- precip_month$precip_sum_jan
-  
-  # Apply formula to variables
-  yield <- (-0.015 * tmin_feb) - (0.0046 * (tmin_feb)^2) - (0.07 * prec_jan) + (0.0043 * (prec_jan)^2) + 0.28
-  
-}
-  
-## Calculating profit
   # Calculate price per ton
   price_ton <- price_lb * 2000
   
-  # Calculate revenue
-  revenue <- price_ton * yield
+  # Calculate revenue and profit
+  result$profit <- (price_ton * result$yield) - cost_acre
+  result$price_lb <- price_lb
+  result$cost_acre <- cost_acre
   
-  # Calculate final profit
-  profit <- revenue - cost_acre
-  
-  return(data.frame(yield = yield, profit = profit, price_lb = price_lb, cost_acre = cost_acre))
+  return(result)
 }
 ```
 
-```{r}
-alm_profit(1.99, 3029, climate)
-```
+The parameter values that we use in our test run as well as for benchmarks in our sensitivity analysis are 1.99 dollars per lb of almonds and 3029 dollars for cost to grow an acre. These values come from [Terrain's 2026 Almond Production report](https://www.terrainag.com/wp-content/uploads/2025/12/Terrain-Almonds-Q1_2026.pdf), and are averages. 
+
+We opted to keep our sensitivity analysis rather simple, and assume that these parameters stay constant over time.
 
 ```{r}
-price_lb <- seq(1, 3, by = 0.1)
+# Apply function to test values
+test <- alm_profit(price_lb = 1.99, cost_acre = 3029, climate)
 ```
 
+This was successful!
+
+## Sensitivity Analysis
+
+First, we create vectors of our possible parameter values. For our analysis, we choose 20 values that are equally-spaced, with our test values (defined above) as the center.
 
 ```{r}
-df <- map_df(.x = price_lb, ~alm_profit(.x, cost_acre = 3029, climate))
+# Create vector of potential price per lb values
+price_lb <- seq(1, 3, length.out = 20)
+
+# And vector of cost per acre
+cost_acre = seq(2000, 4000, length.out = 20)
+
+# Combine into single parameters data frame
+params <- cbind.data.frame(price_lb, cost_acre)
 ```
 
+From there, we apply our `alm_profit` function and produce a data frame of `price_lb`, `cost_acre`, year, and profit values. This is our sensitivity analysis!
+
 ```{r}
-ggplot(df, aes(x = factor(price_lb), y = profit)) +
-  geom_boxplot()
-```
-```{r}
-ggplot(df, aes(x = factor(price_lb), y = profit)) +
-  geom_boxplot(outlier.shape = NA) +
-  ylim(-3500, 3500)
+# Apply profit function to parameters data frame
+results <- params %>% 
+  pmap(alm_profit, climate_data = climate)
+
+# Create a data frame from results
+results_df <- bind_rows(results, .id = "run_id")
+
+# Add parameters to data frame
+results_df <- results_df %>%
+  left_join(params %>% mutate(run_id = as.character(row_number())), by = "run_id")
 ```
 
+## Visualizing Results
+
+Plotting the sensitivity of almond profit to almond price per lb as well as cost per acre. 
+
+```{r}
+# Initialize ggplot, assign each variable of interest to different aspect of graph
+ggplot(results_df, aes(x = price_lb.x, y= profit, color = cost_acre.x)) +
+  
+  # Scatter plot
+  geom_point() + 
+  
+  # Labels and customizations
+  labs(title = "Almond Profit Sensitivity Analysis", 
+       x = "Price per lb ($)", 
+       y = "Profit ($)",
+       color = "Cost per acre ($)") +
+  theme_minimal() +
+  scale_color_viridis_c() +
+  scale_y_continuous(labels = scales::comma)
+```
+
+Doing the same, but faceting by year to see how changes in yield over time affect sensitivity.
+
+```{r}
+# Initialize ggplot, assign each variable of interest to different aspect of graph
+ggplot(results_df, aes(x = price_lb.x, y= profit, color = cost_acre.x)) +
+  
+  # Scatter plot
+  geom_point() + 
+  
+  # Labels and customizations
+  labs(title = "Almond Profit Sensitivity Analysis", 
+       x = "Price per lb ($)", 
+       y = "Profit ($)",
+       color = "Cost per acre ($)") +
+  theme_minimal() +
+  theme(axis.text = element_text(size = 5)) +
+  scale_color_viridis_c() +
+  scale_y_continuous(labels = scales::comma) +
+  
+  # Facet by year
+  facet_wrap(~year)
+  
+```
+
+## Conclusion
+
+Based on our analysis, it appears that almond price per lb has a larger effect on almond profit compared to cost per acre. Higher costs per acre can still be associated with relatively high profits. Perhaps this is because the scale of our variables is so different: a 10-cent difference in price per lb may be a lot more impactful than a 100-dollar change in cost per acre.
+
+Our faceted plot shows us that the relationship between our three variables does change depending on yield (though, it is a bit difficult to make out distinctions; the large number of years squishes all of our data). Also, it can be noted that we see a linear pattern because of the way we chose to simulate our `pice_lb` and `cost_acre` variables. Using a distribution function like `rnorm()` could potentially yield very different results.

@@ -1,6 +1,6 @@
 #' alm_yield
 #'
-#' Compute almond yield based on monhtly temperatures and precipitation
+#' Compute almond yield based on monthly temperatures and precipitation
 #' 
 #' @param climate_data a data frame that contains monthly minimum and maximum temperatures (celsius) and precipitation (mm)
 #' @returns a vector of years and their corresponding almond yields in tons/acre (`yield`)
