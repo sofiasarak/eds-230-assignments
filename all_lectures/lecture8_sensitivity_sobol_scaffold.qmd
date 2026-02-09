@@ -207,6 +207,11 @@ height <- runif(min = 9.5, max = 10.5, n = np)
 x1 <- cbind.data.frame(k_o, k_d, v, height)
 
 # repeat sampling (run variables again) and call it X2
+k_o <- rnorm(mean = 0.1, sd = 0.1 * 0.1, n = np)
+k_d <- rnorm(mean = 0.7, sd = 0.7 * 0.1, n = np)
+v <- rnorm(mean = 250, sd = 30, n = np)
+height <- runif(min = 9.5, max = 10.5, n = np)
+
 x2 <- cbind.data.frame(k_o, k_d, v, height)
 
 # there are different versions of sobol functions that have different approaches for estimating parameters and indices, we use an approach implemented by jansen

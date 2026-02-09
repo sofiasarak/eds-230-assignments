@@ -2,24 +2,23 @@
 title: "Sobol Sensitivity Analysis Assignment"
 author: "Sofia Sarak"
 date: "February 10, 2026"
-output:
-  pdf_document: default
-  html_document: default
+format: pdf
+editor: visual
 ---
 
 *Assignment Part I*
 
-Choose one of the 3 papers below that provide an example of sensitivity analysis of model parameters. *Or* find another paper that uses model sensitivity analysis as part of understanding an enviromental topic
+Choose one of the 3 papers below that provide an example of sensitivity analysis of model parameters. *Or* find another paper that uses model sensitivity analysis as part of understanding an envirnomental topic
 
 After going through the paper, write a paragraph describing how results of the sensitivity analysis reported on in the paper might contribute to understanding (or prediction) within an environmental problem solving or management context.
 
 As in, *why* did they do a sensitivity analysis? Why is it important here?
 
-Snow modeling
+**Selection:** Uranium in Groundwater Model
 
-Building Cooling Energy Mdoel
+**Response:** This study by Kumar et al. (2019) uses a Sobol sensitivity analysis to determine the effects of variables such as water intake rate (IR), uranium concentration (Cw), and exposure frequency (EF) on hazards of uranium. They used data from the Gaya District of Bihar, India, where they systematically sampled and tested groundwater sources. The study included two models: ingestion (oral) and dermal, which were conducted for child and adult age groups. Sensitivity analysis was used to determine the relative importance of each input. Results showed that Cw was the most sensitive input followed by IR and EF. It also found that adults experienced relatively higher exposure doses than the children in the region.
 
-Uranium in Groundwater Model
+The sensitivity analysis allowed the researchers to predict which factors contributed most to oral and dermal uranium risk based on their model. In the future, they can compare this sensitivity analysis to real-world data with the same/similar variables, and determine how accurate and robust their model is (i.e. increase their understanding). If there model is accurate, it can then be applied and used in various regions to help inform regulation. Additionally, knowing the sensitivity of their model can help ensure that no one input (like IR) is overly sensitive; if this was the case, there would be a risk of large and inaccurate deviations in output based on small changes in input (i.e. sensitivity analysis can improve prediction).
 
 *Assignment Part 2*
 
@@ -69,6 +68,7 @@ library(tidyverse)
 ```
 
 **Use the Sobel approach to generate parameter values for the 4 parameters:**
+
 ```{r}
 # source atmospheric conductance function
 source(here("R/Catm.R"))
@@ -96,6 +96,7 @@ x2 <- cbind.data.frame(k_o, k_d, v, height)
 ```
 
 **Run the atmospheric conductance model for these parameters:**
+
 ```{r}
 # create null sobol model using our two sets of parameters
 sens_Catm_Sobol = sobolSalt(model = NULL, x1, x2, nboot = 100)
@@ -114,6 +115,7 @@ sens_Catm_sobol = sensitivity::tell(sens_Catm_Sobol, res, res.names = "gs")
 **Estimate the Sobel Indices for output:**
 
 Show main effect, or S, indices. S indices partition variance (main effect without co-variance), and sum approximately to one.
+
 ```{r}
 # assign row names based on corresponding parameters (for better understanding)
 rownames(sens_Catm_sobol$S) = colnames(params)
@@ -123,6 +125,7 @@ sens_Catm_sobol$S
 ```
 
 Show total effect, or T, indices, which account for parameter interactions.
+
 ```{r}
 # assign row names based on corresponding parameters (for better understanding)
 rownames(sens_Catm_sobol$T) = colnames(params)
@@ -132,11 +135,13 @@ sens_Catm_sobol$T
 ```
 
 You can also view all indices by simply printing the model summary.
+
 ```{r}
 print(sens_Catm_Sobol)
 ```
 
 **Plot conductance estimates in a way that accounts for parameter uncertainty:**
+
 ```{r}
 # first combine parameters and output  
 both <- cbind.data.frame(params, gs = sens_Catm_sobol$y)
@@ -155,21 +160,8 @@ ggplot(both, aes(x = gs)) +
 
 In my results, v (wind speed) has the highest *total* effect on response and k_d has the second. k_d and k_o are very close in effect (and results may change based on normal sampling of parameters), therefore I have included plots depicting both variables.
 
-Conductance estimates against windspeed, using k_d as second variable:
-```{r}
-# plot estimate relative to windspeed, coloring by k_d paremeter
-ggplot(both, aes(x= v, y = gs, col = k_d)) + 
-  geom_point(alpha = 0.5) +
-  labs(x = "Wind Speed (m/s)",
-       y = "Estimate (cm/s)",
-       title = "Atmospheric Conductance Estimates",
-       subtitle = "Based on windspeed (v) and zero-plane displacement height (k_d)",
-       color = "Zero-Plane \nDisplacement Height (m)") +
-  theme_minimal() +
-  scale_color_viridis_c()
-```
-
 Conductance estimates against windspeed, using k_o as second variable:
+
 ```{r}
 # plot estimate relative to windspeed, coloring by k_d paremeter
 ggplot(both, aes(x= v, y = gs, col = k_o)) + 
@@ -183,28 +175,36 @@ ggplot(both, aes(x= v, y = gs, col = k_o)) +
   scale_color_viridis_c()
 ```
 
+Conductance estimates against windspeed, using k_d as second variable:
+
+```{r}
+# plot estimate relative to windspeed, coloring by k_d paremeter
+ggplot(both, aes(x= v, y = gs, col = k_d)) + 
+  geom_point(alpha = 0.5) +
+  labs(x = "Wind Speed (m/s)",
+       y = "Estimate (cm/s)",
+       title = "Atmospheric Conductance Estimates",
+       subtitle = "Based on windspeed (v) and zero-plane displacement height (k_d)",
+       color = "Zero-Plane \nDisplacement Height (m)") +
+  theme_minimal() +
+  scale_color_viridis_c()
+```
+
 **Comment on what this tells you about how atmospheric conductance and its sensitivity to variation in windspeed differs in this setting as compared to the setting that we examined in class where windspeed was lower and less variable and vegetation was taller.**
 
-Wind speed has a much higher total effect in this model/parameter set than the one we did in class. In the case of higher and more variable wind speeds as well as shorter vegetation, wind speed's total effect is ~0.5. In the previous example, it was ~0.2. 
+Wind speed has a much higher total effect on atmospheric conductance in *this* model/parameter set than the one we did in class. In the case of higher and more variable wind speeds as well as shorter vegetation, wind speed's total effect is \~0.5. In the previous example, it was \~0.2. This tells us that atmospheric conductance is more dependent on wind speed in the case of this assignment.
 
-This suggests that the combination of higher wind speeds and shorter vegetation limit the effects of other variables in the system. It is difficult to exactly pinpoint whether it was vegtation height or wind speed that caused this effect, since we changed both at the same time. However, we can hypothesize:
-- Shorter vegetation heights reduce the turbulence and mixing of air in canopies. Since this value decreased, it may have allowed for wind speed to have a larger effect.
-- Higher wind speeds reduce the stagnant air boundary layer surrounding canopies. This may be more significant to atmospheric conductance, and therefore have a larger effect in this rendition of our model.
+This suggests that the combination of higher wind speeds and shorter vegetation limit the effects of other variables in the system. It is difficult to exactly pinpoint whether it was vegetation height or wind speed that caused this effect, since we changed both at the same time. However, we can hypothesize:
 
-It is also interesting that total effects of k_o (roughness length for momentum, representative of surface drag) and k_d (zero_plane displacement height) change to be more equal with this parameter set.
+-   Shorter vegetation heights reduce the turbulence and mixing of air in canopies. Since this value decreased, it may have allowed for wind speed to have a larger effect.
 
-k_o (Roughness length for momentum, represents surface drag) --> here, less important than windspeed. In the class example, wind speed was more important.
+-   Higher wind speeds reduce the stagnant air boundary layer surrounding canopies. This may be very significant to atmospheric conductance, and therefore have a larger effect in this rendition of our model.
 
-here, most imporant is kd, or Zero-plane displacement height (m), which is the height at which wind speed would theoretically be zero
-- the more dense a canopy and the higher the tree, the higher the displacement height 
-
-because veg height is lower and is less of a limit, now kd becomes more of a limit. in this example, wind speed v and ko are tied for second most important variable. when wind speed is higher and veg is lower, perhaps density is more influential on atmospheric conductance than wind speed and surface drag. Also, maybe because wind speed is more variable, meaning its affect is less stable.
-
-in this example: higher mean wind speed (but greater sd) and lower veg height
+It is also interesting that total effects of k_o (roughness length for momentum, representative of surface drag) and k_d (zero_plane displacement height) change to be more equal with this parameter set. Overall, a change in parameters alters the effects of all model inputs.
 
 **Submit a pdf or html document with your code, graphs, and answers to the questions on Canvas Due**
 
-------------------------------------------------------------------------------------------------------------------------
+------------------------------------------------------------------------
 
 *Grading Rubric*. Total points 80. (normalized to 10 for Canvas)
 
