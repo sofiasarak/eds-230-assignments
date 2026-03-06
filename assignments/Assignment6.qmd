@@ -1,0 +1,177 @@
+---
+title: "Assignment 6: Sobol and Dynamic Model"
+author: "Sofia Sarak"
+format: pdf
+editor: visual
+---
+
+The following document contains responses to Assignment 6 of EDS230: Modeling Environmental Systems. It considers a model of forest growth, where forest size is measured in units of carbon (C).
+
+The three variable parameters include K (carrying capacity), r (exponential growth rate before canopy closure), and g (linear growth rate after canopy closure). There is a canopy closure threshold of 50 kg/C, where the rate of forest growth changes. The forest model function can be found within the R folder of this repository, called `dforestgrowth`.
+
+### 0. Load necessary libraries
+
+```{r}
+#| message: false
+#| warning: false
+
+# libraries
+library(tidyverse)
+library(deSolve)
+library(here)
+library(sensitivity)
+```
+
+### 1. Implement Model in R as Differential Equations
+
+```{r}
+# forest growth function
+source(here("R/dforestgrowth.R"))
+```
+
+### 2. Run the Model for 300 years using ODE solver and defined parameters
+
+```{r}
+# create a sequence of years from 1 to 300
+time <- seq(from = 1, to = 300)
+
+# initial forest size 
+Cinitial <- 10
+
+# create list of parameters to input into ode
+params <- list(K = 250, r = 0.01, g = 2)
+
+# run ode function and save result
+res <- ode(y = Cinitial, times = time, func = dforestgrowth, parms = params)
+
+# rename columns for clarity
+colnames(res) <- c("time", "C")
+```
+
+### 3. Graph ODE results
+
+```{r}
+# plot 
+ggplot(as.data.frame(res), aes(time, C)) +
+  geom_point(color= "forestgreen") +
+  labs(title = "Forest size trajectory with no uncertainty") +
+  theme_minimal()
+```
+
+### 4. Run a Sobol Global
+
+```{r}
+# create wrapper function
+c_wrapper <- function(K, r, g, Cinitial, simtimes, odefunc, metricfunc) {
+  
+  # create parameter list
+  params <- list(K = K, r = r, g = g)
+  
+  # run ode
+  result <- ode(y = Cinitial, times = simtimes, func = odefunc, parms = params, method="euler")
+  
+  # results as a data frame
+  result = data.frame(time=result[,1], dC=result[,2])
+  
+  # compute metrics
+  metrics <- metricfunc(as.data.frame(result))
+  return(metrics)
+}
+
+# create function to compute metric, which is maximum forest size
+compute_growth_metric <- function(result) {
+  # first add maximum population
+  maxforestsize <- max(result$dC)
+  
+  # return results
+  return(list(maxforestsize = maxforestsize))
+}
+```
+
+```{r}
+# test wrapper function using specific values
+c_wrapper(K = 250, r = 0.01, g = 2, Cinitial = 10, 
+          simtimes = seq(from = 1, to = 300),
+          odefunc = dforestgrowth, metricfunc = compute_growth_metric)
+```
+
+
+```{r}
+# create parameter distributions to test sensitivity across 3 variables
+
+# set number of parameters
+np <- 2000
+
+# create first set of normal distributions of K, r, and g
+K <- rnorm(mean = 250, sd = 0.1*250, n = np)
+r <- rnorm(mean = 0.01, sd = 0.1 * 0.01, n = np)
+g <- rnorm(mean = 2, sd = 0.1 * 2, n = np)
+x1 <- cbind.data.frame(K = K, r = r, g = g)
+
+# create second set of normal distributions
+K <- rnorm(mean = 250, sd = 0.1*250, n = np)
+r <- rnorm(mean = 0.01, sd = 0.1 * 0.01, n = np)
+g <- rnorm(mean = 2, sd = 0.1 * 2, n = np)
+x2 <- cbind.data.frame(K = K, r = r, g = g)
+
+# fix any negative values and they are not meaningful
+# the pmax function makes any values that are negative 0
+x1 <- x1 %>% map_df(pmax, 0.0)
+x2 <- x2 %>% map_df(pmax, 0.0)
+
+# create Sobol object and get the parameter set we will be running the model on
+sens_C <- sobolSalt(model = NULL, x1, x2, nboot = 300)
+
+# assign proper column names for interpretability 
+colnames(sens_C$X) <- c("K", "r", "g")
+
+# view parameter set
+head(sens_C$X)
+```
+```{r}
+# run wrapper on all parameter sets
+allresults <- as.data.frame(sens_C$X) %>% 
+  pmap(c_wrapper, Cinitial = 10, simtimes = seq(from = 1, to = 300), 
+       odefunc = dforestgrowth, metricfunc = compute_growth_metric)
+```
+
+```{r}
+# extract out results from pmap into a data frame
+allres <- allresults %>% 
+  map_dfr(`[`, c("maxforestsize"))
+
+# do a quick summary to get a sense of the range
+summary(allres)
+```
+### 5. Graph sensitivity of max forest size as a box plot and record Sobol indices
+
+```{r}
+# extract Sobol indices S and T
+sens_C <- tell(sens_C, allres$maxforestsize)
+
+# rename row names for clarity
+rownames(sens_C$S) <- c("K", "r", "g")
+rownames(sens_C$T) <- c("K", "r", "g")
+
+print(sens_C$S)
+print(sens_C$T)
+
+# boxplot of maximum forest size
+tmp <- allres %>% pivot_longer(cols = everything(), names_to = "metric", values_to = "value")
+ggplot(allres, aes(x = " ",
+                   y = maxforestsize)) +
+  geom_boxplot(width = 0.5,
+               color = "forestgreen",
+               fill = alpha("forestgreen", 0.4)) +
+  labs(x = " ",
+       title = "Sensitivity of maximum forest size",
+       y = "Units of carbon") +
+  theme_minimal()
+```
+
+### 6. In 2-3 sentences, discuss what the results of your simulation might mean
+
+From the first-order Sobol indices, we can see that with no consideration of co-variance between parameters, K, or carrying capacity, has the largest effect on maximum forest size. From the total sensitivity index (or T), we see a similar pattern, with carrying capacity contributing the most -- by far -- to maximum forest size over 300 years.
+
+These results suggest that climate change's influence on carrying capacity could significantly impact maximum forest size. Variables that impact carrying capacity include climate, water availability, nutrients, and space/habitat, all of which climate change affects in the natural environment.
+
