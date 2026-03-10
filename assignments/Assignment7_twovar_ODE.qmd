@@ -40,6 +40,98 @@ You can assume the following are best guesses of key parameters
 
 rprey=0.95, alpha=0.01, eff=0.6,pmort=0.4, K=2000,
 
+```{r}
+library(here)
+library(deSolve)
+
+
+source(here("R/lotvmod_hunt.R"))
+
+# set initial conditions
+currpop <- c(prey = 10, pred = 1)
+
+# time points
+days <- seq(from = 1, to = 100, by = 1)
+
+# set parameters
+pars <- c(rprey = 0.95, alpha = 0.01, eff = 0.6, pmort = 0.4, K = 2000, 
+          hunt_eff = 0.01) # hunting removes 1% of prey population
+
+# run model
+res <- ode(func = lotvmod_hunt, y = currpop, times = days, parms = pars)
+
+resl <- as.data.frame(res) %>% pivot_longer(-time, names_to = "animal", values_to = "pop")
+p1 <- ggplot(resl, aes(time, pop, col = animal)) +
+  geom_line()
+
+p1
+```
+
+**Stable population:** After a decrease in population, both predator and prey populations can "bounce back" to starting populations before hunting can begin again.
+
+
+```{r}
+hunt_vals <- seq(0.001, 0.2, by = 0.01)
+
+sens_results <- map_dfr(hunt_vals, function(h) {
+  p <- pars
+  p["hunt_eff"] <- h
+  ode(func = lotvmod_hunt, y = currpop, times = days, parms = p) |>
+    as.data.frame() |>
+    mutate(hunt_eff = h)
+})
+
+ggplot(sens_results, aes(x = time, y = prey, color = hunt_eff, group = hunt_eff)) +
+  geom_line(alpha = 0.7) +
+  scale_color_viridis_c() +
+  labs(title = "Prey sensitivity to hunt_eff")
+
+ggplot(sens_results, aes(x = time, y = pred, color = hunt_eff, group = hunt_eff)) +
+  geom_line(alpha = 0.7) +
+  scale_color_viridis_c() +
+  labs(title = "Predator sensitivity to hunt_eff")
+```
+
+
+```{r}
+# Sensitivity analysis of different prey populations
+library(deSolve)
+library(tidyverse)
+
+# Define which parameters to test and their ranges
+sens_pars <- list(
+  hunt_eff = seq(0, 0.5, by = 0.01),
+  rprey    = seq(0.5, 1.5, by = 0.1),
+  K        = seq(500, 3000, by = 250)
+)
+
+# Run model across a single parameter's range, holding others fixed
+run_sensitivity <- function(par_name, par_values, base_pars, pop, times) {
+  map_dfr(par_values, function(val) {
+    p <- base_pars
+    p[par_name] <- val
+    res <- ode(func = lotvmod_hunt, y = pop, times = times, parms = p)
+    as.data.frame(res) |>
+      mutate(param = par_name, param_value = val)
+  })
+}
+
+# Run for all parameters
+sens_results <- map_dfr(names(sens_pars), function(par_name) {
+  run_sensitivity(par_name, sens_pars[[par_name]], pars, currpop, days)
+})
+
+sens_summary <- sens_results |>
+  group_by(param, param_value) |>
+  summarise(min_prey = min(prey), max_prey = max(prey), .groups = "drop")
+
+ggplot(sens_summary, aes(x = param_value, y = min_prey)) +
+  geom_line() + geom_point() +
+  facet_wrap(~param, scales = "free_x") +
+  labs(title = "Minimum prey population by parameter value")
+```
+
+
 Submit - the Quato document with your analysis AND a pdf/html version, any R files This should include
 
 a)  your hunting model

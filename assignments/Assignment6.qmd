@@ -95,7 +95,6 @@ c_wrapper(K = 250, r = 0.01, g = 2, Cinitial = 10,
           odefunc = dforestgrowth, metricfunc = compute_growth_metric)
 ```
 
-
 ```{r}
 # create parameter distributions to test sensitivity across 3 variables
 
@@ -128,6 +127,7 @@ colnames(sens_C$X) <- c("K", "r", "g")
 # view parameter set
 head(sens_C$X)
 ```
+
 ```{r}
 # run wrapper on all parameter sets
 allresults <- as.data.frame(sens_C$X) %>% 
@@ -143,6 +143,7 @@ allres <- allresults %>%
 # do a quick summary to get a sense of the range
 summary(allres)
 ```
+
 ### 5. Graph sensitivity of max forest size as a box plot and record Sobol indices
 
 ```{r}
@@ -174,4 +175,3 @@ ggplot(allres, aes(x = " ",
 From the first-order Sobol indices, we can see that with no consideration of co-variance between parameters, K, or carrying capacity, has the largest effect on maximum forest size. From the total sensitivity index (or T), we see a similar pattern, with carrying capacity contributing the most -- by far -- to maximum forest size over 300 years.
 
 These results suggest that climate change's influence on carrying capacity could significantly impact maximum forest size. Variables that impact carrying capacity include climate, water availability, nutrients, and space/habitat, all of which climate change affects in the natural environment.
-
