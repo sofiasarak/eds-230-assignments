@@ -17,14 +17,21 @@
 lotvmod_hunt <- function(t, pop, pars){
   with(as.list(c(pars, pop)), {
     
-    # include hunting if prey population is over 100
-    if (prey > 100){
+    # make sure you are not hunting more prey than exist
+    if(prey * hunt_eff > prey){hunt_eff = 0}
+    
+    # make sure there are no negative values
+    prey <- max(prey, 0)
+    pred <- max(pred, 0)
+    
+    # include hunting if prey population is over threshold
+    if (prey > thresh){
       dprey <- rprey * (1 - prey / K) * prey - alpha * prey * pred - prey * hunt_eff
       dpred <- eff * alpha * prey * pred - pmort * pred
       return(list(c(dprey, dpred)))
     }else{
       
-      # if prey population is under 100 (hunting not allowed)
+      # if prey population is under threshold (hunting not allowed)
       
       dprey <- rprey * (1 - prey / K) * prey - alpha * prey * pred
       dpred <- eff * alpha * prey * pred - pmort * pred

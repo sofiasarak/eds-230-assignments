@@ -1,8 +1,8 @@
 ---
 title: "Assignment 7 - Two Variables ODE"
-output:
-  pdf_document: default
-  html_document: default
+author: "Sofia Sarak"
+date: "March 10, 2026"
+output: pdf
 ---
 
 ```{r setup, include=FALSE}
@@ -11,7 +11,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ------------------------------------------------------------------------
 
-## Assignment {.scrollable}
+## Assignment Instructions
 
 Consider how you might add hunting of prey to the predator prey model that we've been using in class
 
@@ -40,125 +40,295 @@ You can assume the following are best guesses of key parameters
 
 rprey=0.95, alpha=0.01, eff=0.6,pmort=0.4, K=2000,
 
+## Initial model (also see lotvmod_hunt.R)
+
+The function/model with the addition of hunting can be found in the corresponding R file, but it essentially subtracts hunting rate * prey (the amount of prey hunted) from the prey population, with an if else statement controlling whether hunting occurs based on whether a prey population threshold is set.
+
 ```{r}
+#| message: false
+#| warning: false
 library(here)
 library(deSolve)
-
+library(tidyverse)
+library(patchwork)
 
 source(here("R/lotvmod_hunt.R"))
 
 # set initial conditions
-currpop <- c(prey = 10, pred = 1)
+currpop <- c(prey = 100, pred = 5)
 
 # time points
 days <- seq(from = 1, to = 100, by = 1)
 
+## Hunting is immediately active
 # set parameters
 pars <- c(rprey = 0.95, alpha = 0.01, eff = 0.6, pmort = 0.4, K = 2000, 
-          hunt_eff = 0.01) # hunting removes 1% of prey population
+          hunt_eff = 0.02, thresh = 50) # hunting removes 1% of prey population
 
 # run model
-res <- ode(func = lotvmod_hunt, y = currpop, times = days, parms = pars)
+res_50 <- ode(func = lotvmod_hunt, y = currpop, times = days, parms = pars)
 
-resl <- as.data.frame(res) %>% pivot_longer(-time, names_to = "animal", values_to = "pop")
-p1 <- ggplot(resl, aes(time, pop, col = animal)) +
-  geom_line()
+resl_50 <- as.data.frame(res_50) %>% pivot_longer(-time, names_to = "animal", values_to = "pop")
+p1 <- ggplot(resl_50, aes(time, pop, col = animal)) +
+   labs(title = "thresh = 50",
+        y = "population",
+        x = "time (years)") +
+  geom_line() +
+  geom_hline(yintercept = 100) +
+  theme_minimal()
 
-p1
+## Hunting is not immediately active
+# set parameters with threshold = 0 (or no threshold)
+pars <- c(rprey = 0.95, alpha = 0.01, eff = 0.6, pmort = 0.4, K = 2000, 
+          hunt_eff = 0.01, thresh = 500) # hunting removes 1% of prey population 
+
+# run model
+res_500 <- ode(func = lotvmod_hunt, y = currpop, times = days, parms = pars)
+
+resl_500 <- as.data.frame(res_500) %>% pivot_longer(-time, names_to = "animal", values_to = "pop")
+p2 <- ggplot(resl_500, aes(time, pop, col = animal)) +
+  labs(title = "thresh = 500",
+       y = "population",
+       x = "time (year)") + 
+  geom_line() +
+   geom_hline(yintercept = 100) + 
+  theme_minimal()
 ```
 
-**Stable population:** After a decrease in population, both predator and prey populations can "bounce back" to starting populations before hunting can begin again.
+## Testing stability based on threshold values
+
+In the plots below, the horizontal line represents our stability condition (in this case, current prey population = 100).
+
+```{r}
+p1 + p2 +
+  plot_layout(guides = "collect")
+```
+
+**Stable population definition:** If in 90 to 100 years, the maximum prey population in that time range is more than the starting population, than the prey and predator populations are stable. 
+
+I chose this metric 1) because the prey population is also representative of the predator population, 2) a time range is more representative of a population than a single year, since the populations are cyclical, and 3) 90-100 years in the future, if simulated regularly, could be enough to make any changes to legislation that could fix negative effects far enough in advance for the change to be impactful.
+
+```{r}
+# assign current/starting population value
+currpop_stable <- 100
+
+stable <- function(res){
+  
+  # filter results data frame to time and animal of interest
+ val <- res %>%
+    filter(time >= 90, time <= 100, animal == "prey") %>%
+    pull(pop) %>% 
+   max()
+  
+ # print stability results based on population metric
+  if (val > currpop_stable) {
+   return("Stability condition met")
+  } else {
+    return("Stability condition not met")
+  }
+}
+```
+
+Our three test cases will be a threshold of 50, 350, and 500. Here we test our stability metric on all three.
+
+```{r}
+# running threshold = 350
+pars <- c(rprey = 0.95, alpha = 0.01, eff = 0.6, pmort = 0.4, K = 2000, 
+          hunt_eff = 0.01, thresh = 350) # hunting removes 1% of prey population 
+
+res_350 <- ode(func = lotvmod_hunt, y = currpop, times = days, parms = pars)
+
+resl_350 <- as.data.frame(res_500) %>% pivot_longer(-time, names_to = "animal", values_to = "pop")
+
+met_50 <- stable(res = resl_50)
+met_350 <- stable(res = resl_350)
+met_500 <- stable(res = resl_500)
+
+print(paste("When the population threshold is 50, ", met_50))
+print(paste("When the population threshold is 350, ", met_350))
+print(paste("When the population threshold is 500, ", met_500))
+```
+
+From these results, we can see that with threshold values of 350 and 500, our population will be stable according to our definition. For a threshold of 50 (representing hunting beginning immediately), the prey population would not be stable.
+
+Based on different values of this threshold, we can conclude that hunting legislation should not allow hunting of the prey population if it is less than 350 (more granular analysis would have to be run for more accurate results).
+
+## Testing stability based on hunting values (`hunt_eff`)
+
+```{r}
+# set initial conditions
+currpop <- c(prey = 100, pred = 5)
+
+# time points
+days <- seq(from = 1, to = 100, by = 1)
+
+## Low hunting effort
+# set parameters
+pars <- c(rprey = 0.95, alpha = 0.01, eff = 0.6, pmort = 0.4, K = 2000, 
+          hunt_eff = 0.005, thresh = 50) # hunting removes 1% of prey population
+
+# run model
+res_1 <- ode(func = lotvmod_hunt, y = currpop, times = days, parms = pars)
+
+resl_1 <- as.data.frame(res_1) %>% pivot_longer(-time, names_to = "animal", values_to = "pop")
+
+# Medium hunting effort
+# set parameters
+pars <- c(rprey = 0.95, alpha = 0.01, eff = 0.6, pmort = 0.4, K = 2000, 
+          hunt_eff = 0.01, thresh = 50) # hunting removes 1% of prey population
+
+# run model
+res_2 <- ode(func = lotvmod_hunt, y = currpop, times = days, parms = pars)
+
+resl_2 <- as.data.frame(res_2) %>% pivot_longer(-time, names_to = "animal", values_to = "pop")
+
+## Higt hunting effort
+# set parameters with threshold = 0 (or no threshold)
+pars <- c(rprey = 0.95, alpha = 0.01, eff = 0.6, pmort = 0.4, K = 2000, 
+          hunt_eff = 0.1, thresh = 500) # hunting removes 1% of prey population 
+
+# run model
+res_3 <- ode(func = lotvmod_hunt, y = currpop, times = days, parms = pars)
+
+resl_3 <- as.data.frame(res_3) %>% pivot_longer(-time, names_to = "animal", values_to = "pop")
+```
+
+```{r}
+# Stabililty test
+
+print(paste("When the hunting effort is low (0.005), ", stable(res = resl_1)))
+print(paste("When the hunting effort is medium (0.01), ",stable(res = resl_2)))
+print(paste("When the hunting effort is high (0.1), ", stable(res = resl_3)))
+```
+
+Hunting effort doesn't seem to have a large effect on population stability, based on our definition of stability.
+
+From our results, we can assume that legislation should place more effort on limiting when hunting can begin in the season (at what prey population), rather than the hunting effort itself. Higher hunting efforts can be simulated to see effects.
+
+## Running informal sensitivity analysis on `hunt_eff`
 
 
 ```{r}
+currpop <- c(prey = 100, pred = 5)
+
+# create range of hunting effort values
 hunt_vals <- seq(0.001, 0.2, by = 0.01)
 
+# create a function that 
 sens_results <- map_dfr(hunt_vals, function(h) {
   p <- pars
-  p["hunt_eff"] <- h
+  pars["hunt_eff"] <- h
   ode(func = lotvmod_hunt, y = currpop, times = days, parms = p) |>
     as.data.frame() |>
     mutate(hunt_eff = h)
 })
 
-ggplot(sens_results, aes(x = time, y = prey, color = hunt_eff, group = hunt_eff)) +
+prey <- ggplot(sens_results, aes(x = time, y = prey, color = hunt_eff, group = hunt_eff)) +
   geom_line(alpha = 0.7) +
   scale_color_viridis_c() +
-  labs(title = "Prey sensitivity to hunt_eff")
+  labs(title = "Prey sensitivity to hunt_eff",
+       color = "Hunting effort", 
+       x = "time (years)") +
+  theme_minimal()
 
-ggplot(sens_results, aes(x = time, y = pred, color = hunt_eff, group = hunt_eff)) +
+pred <- ggplot(sens_results, aes(x = time, y = pred, color = hunt_eff, group = hunt_eff)) +
   geom_line(alpha = 0.7) +
   scale_color_viridis_c() +
-  labs(title = "Predator sensitivity to hunt_eff")
+  labs(title = "Predator sensitivity to hunt_eff",
+       y = "predator",
+       color = "Hunting effort",
+       x = "time (years)") +
+  theme_minimal()
+
+prey + pred +
+  plot_layout(guides = "collect")
 ```
 
+This sensitivity further confirms that hunting effort only varies prey and predator populations slightly, with lower efforts corresponding to larger populations on average.
 
+## Running Sobol to test parameter sensitivity
+
+Attempt on one parameter set
+ 
 ```{r}
-# Sensitivity analysis of different prey populations
-library(deSolve)
-library(tidyverse)
+#| message: false
+library(sensitivity)
 
-# Define which parameters to test and their ranges
-sens_pars <- list(
-  hunt_eff = seq(0, 0.5, by = 0.01),
-  rprey    = seq(0.5, 1.5, by = 0.1),
-  K        = seq(500, 3000, by = 250)
-)
-
-# Run model across a single parameter's range, holding others fixed
-run_sensitivity <- function(par_name, par_values, base_pars, pop, times) {
-  map_dfr(par_values, function(val) {
-    p <- base_pars
-    p[par_name] <- val
-    res <- ode(func = lotvmod_hunt, y = pop, times = times, parms = p)
-    as.data.frame(res) |>
-      mutate(param = par_name, param_value = val)
-  })
+hunt_wrapper <- function(rprey, alpha, eff, pmort, K, hunt_eff, thresh, currpop, days, odefunc, metricfunc) {
+  
+  params <- list(rprey = rprey, alpha = alpha, eff = eff, pmort = pmort,
+                 K = K, hunt_eff = hunt_eff, thresh = thresh)
+  
+  result <- ode(func = odefunc, y = currpop, times = days, parms = params, maxsteps = 50000) |>
+    as.data.frame()  # columns will be: time, prey, pred
+  
+  return(metricfunc(result))
 }
 
-# Run for all parameters
-sens_results <- map_dfr(names(sens_pars), function(par_name) {
-  run_sensitivity(par_name, sens_pars[[par_name]], pars, currpop, days)
-})
+compute_growth_metric <- function(result) {
+  list(max_prey = max(result$prey),
+       min_prey = min(result$prey), 
+       max_pred = max(result$pred),
+       min_pred = min(result$pred))
+}
+```
 
-sens_summary <- sens_results |>
-  group_by(param, param_value) |>
-  summarise(min_prey = min(prey), max_prey = max(prey), .groups = "drop")
-
-ggplot(sens_summary, aes(x = param_value, y = min_prey)) +
-  geom_line() + geom_point() +
-  facet_wrap(~param, scales = "free_x") +
-  labs(title = "Minimum prey population by parameter value")
+```{r}
+#| warning: false
+hunt_wrapper(rprey=0.95, alpha=0.01, eff=0.6,pmort=0.4, K=2000, hunt_eff = 0.1, thresh = 50, currpop = currpop, days = days,
+          odefunc = lotvmod_hunt, metricfunc = compute_growth_metric)
 ```
 
 
-Submit - the Quato document with your analysis AND a pdf/html version, any R files This should include
+Attempting sobol on a range of parameters (assuming rprey, K, and pmort stay the same) fails due to large number of variable -- would require more tuning.
 
-a)  your hunting model
+```{r}
+# set number of parameters
+np <- 2000
 
-b)  your exploration (e.g how you tested different hunting levels and how you defined a stability metric
+# create first set of normal distributions of parameters
+rprey <- rnorm(mean = 0.95, sd = 0.95 * 0.01, n = np)
+alpha <- rnorm(mean = 0.01, sd = 0.01 * 0.01, n = np)
+eff = rnorm(mean = 0.06, sd = 0.6 * 0.01, n = np)
+pmort = rnorm(mean = 0.4, sd = 0.4 * 0.01, n = np)
+K = rnorm(mean = 2000, sd = 2000 * 0.01, n = np)
+hunt_eff <- rnorm(0.1, sd = 0.1 * 0.1,  n = np)
+thresh = rnorm(100, sd = 0.1 * 100, n = np)
+x1 <- cbind.data.frame(rprey = rprey, alpha = alpha, eff = eff, pmort = pmort,
+                 K = K, hunt_eff = hunt_eff, thresh = thresh)
 
-c)  provides you estimated sustainable hunting level and brief explanation of why you chose the metric you did
+# create second set of normal distributions
+rprey <- rnorm(mean = 0.95, sd = 0.95 * 0.01, n = np)
+alpha <- rnorm(mean = 0.01, sd = 0.01 * 0.01, n = np)
+eff = rnorm(mean = 0.06, sd = 0.6 * 0.01, n = np)
+pmort = rnorm(mean = 0.4, sd = 0.4 * 0.01, n = np)
+K = rnorm(mean = 2000, sd = 2000 * 0.01, n = np)
+hunt_eff <- rnorm(0.1, sd = 0.1 * 0.1,  n = np)
+thresh = rnorm(100, sd = 0.1 * 100, n = np)
+x2 <- cbind.data.frame(rprey = rprey, alpha = alpha, eff = eff, pmort = pmort,
+                 K = K, hunt_eff = hunt_eff, thresh = thresh)
 
-# Alternative Assignment
+# fix any negative values and they are not meaningful
+# the pmax function makes any values that are negative 0
+x1 <- x1 %>% map_df(pmax, 0.0)
+x2 <- x2 %>% map_df(pmax, 0.0)
 
-Develop your own 2-vary dynanmic model of an enviromental process you are interested in
+# create Sobol object and get the parameter set we will be running the model on
+sens_hunt <- sobolSalt(model = NULL, x1, x2, nboot = 300)
 
-Explore how parameters in your model impact the outcomes of your model. Include a measure of "stability" as one of the outcomes - you can define stability however you like
+# assign proper column names for interpretability 
+colnames(sens_hunt$X) <- c("rprey", "alpha", "eff", "pmort",
+                 "K", "hunt_eff", "thresh")
 
-Write a brief summary about what your model and sensitivity analysis tell you
+# view parameter set
+head(sens_hunt$X)
+```
 
+```{r}
+#| eval: false
 
-# Grading 
-
-Your grade will be based on the following criteria
-(note for alternative assignment breakdown will be adapted to fit model)
-
-| Criteria | Full Marks | No Marks | Points |
-|----------|------------|----------|--------|
-| **Adding hunting to pred-prey differential equation**  <br> - Correct implementation (including adding parameters and modifying the equation)  <br> - Includes a parameter to restrict hunting if prey falls below some value | 3 pts | 0 pts | 3 pts |
-| **Developed a metric to quantify stability**  <br> - The metric captures some aspect of stability  <br> - The metric is implemented as a function that can be applied to a time series (or multiple time series) | 3 pts | 0 pts | 3 pts |
-| **Exploration of stability**  <br> - Compared the stability metric across different values of parameters used to define hunting  <br> - Comparison is explicit in the Rmarkdown (graph or table) showing how hunting levels influence stability | 4 pts | 0 pts | 4 pts |
-| **Using results to make conclusions**  <br> - 1–2 sentences that justify a decision or policy about the level of hunting that clearly arise from the exploration of stability | 3 pts | 0 pts | 3 pts |
-| **Style**  <br> - Graphs have clear labels and legends (if needed) and clearly communicate the intended message  <br> - Rmarkdown includes text explaining each step leading to the final conclusion about hunting levels | 2 pts | 0 pts | 2 pts |
-|  |  | **Total Points** | **15 pts** |
+# runs in an endless loop, unfortunately
+allresults <- as.data.frame(sens_hunt$X) %>% 
+  pmap(hunt_wrapper, currpop = currpop, days = days,
+          odefunc = lotvmod_hunt, metricfunc = compute_growth_metric)
+```
